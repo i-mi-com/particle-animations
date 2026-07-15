@@ -1,0 +1,187 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>404 Particle Animation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  .error-graphic {
+    width: 100%;
+    max-width: 848px;
+    cursor: default;
+  }
+  .error-graphic canvas {
+    display: block;
+    width: 100%;
+  }
+</style>
+</head>
+<body>
+<div class="error-graphic">
+  <canvas id="canvas404"></canvas>
+</div>
+<script>
+(function() {
+  var canvas = document.getElementById('canvas404');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return;
+
+  var animationFrameId = 0;
+  var particles = [];
+  var mouse = { radius: 60, x: null, y: null };
+
+  var getGradientColor = function(x, y, width, height) {
+    var colors = [
+      { r: 19,  g: 60,  b: 154 },
+      { r: 124, g: 92,  b: 214 },
+      { r: 0,   g: 214, b: 185 },
+      { r: 51,  g: 112, b: 255 }
+    ];
+    var angle = 30 * Math.PI / 180;
+    var axisX = Math.cos(angle);
+    var axisY = Math.sin(angle);
+    var projection = x * axisX + y * axisY;
+    var maxProjection = width * axisX + height * axisY;
+    var percent = Math.max(0, Math.min(projection / maxProjection, 0.9999));
+    var segmentCount = colors.length - 1;
+    var scaledPercent = percent * segmentCount;
+    var startIndex = Math.floor(scaledPercent);
+    var endIndex = Math.min(startIndex + 1, colors.length - 1);
+    var mix = scaledPercent - startIndex;
+    var start = colors[startIndex];
+    var end = colors[endIndex];
+    var r = start.r + (end.r - start.r) * mix;
+    var g = start.g + (end.g - start.g) * mix;
+    var b = start.b + (end.b - start.b) * mix;
+    return 'rgb(' + Math.round(r) + ', ' + Math.round(g) + ', ' + Math.round(b) + ')';
+  };
+
+  var resetParticle = function(particle) {
+    particle.x -= (particle.x - particle.baseX) / 10;
+    particle.y -= (particle.y - particle.baseY) / 10;
+    particle.size -= (particle.size - particle.baseSize) / 10;
+  };
+
+  var init = function() {
+    particles = [];
+    var dpr = window.devicePixelRatio || 1;
+    var logicalWidth = canvas.width / dpr;
+    var logicalHeight = canvas.height / dpr;
+    var tempCanvas = document.createElement('canvas');
+    var tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+    if (!tempCtx) return;
+    tempCanvas.width = logicalWidth;
+    tempCanvas.height = logicalHeight;
+    tempCtx.font = '900 ' + logicalHeight + 'px "Arial Black", sans-serif';
+    tempCtx.fillStyle = 'black';
+    tempCtx.textAlign = 'center';
+    tempCtx.textBaseline = 'middle';
+    tempCtx.fillText('404', logicalWidth / 2, logicalHeight / 2);
+    var textCoordinates = tempCtx.getImageData(0, 0, logicalWidth, logicalHeight);
+    for (var y = 0; y < textCoordinates.height; y += 6) {
+      for (var x = 0; x < textCoordinates.width; x += 6) {
+        var alphaIndex = 4 * y * textCoordinates.width + 4 * x + 3;
+        if (textCoordinates.data[alphaIndex] > 128) {
+          particles.push({
+            baseSize: 1.8,
+            baseX: x,
+            baseY: y,
+            color: getGradientColor(x, y, logicalWidth, logicalHeight),
+            density: 20 * Math.random() + 1,
+            size: 1.8,
+            x: x,
+            y: y
+          });
+        }
+      }
+    }
+  };
+
+  var draw = function() {
+    var dpr = window.devicePixelRatio || 1;
+    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+    particles.forEach(function(particle) {
+      if (mouse.x === null || mouse.y === null) {
+        resetParticle(particle);
+      } else {
+        var dx = mouse.x - particle.x;
+        var dy = mouse.y - particle.y;
+        var distance = Math.hypot(dx, dy) || 1;
+        if (distance < mouse.radius) {
+          var force = (mouse.radius - distance) / mouse.radius;
+          particle.x -= (dx / distance) * force * particle.density;
+          particle.y -= (dy / distance) * force * particle.density;
+          particle.size = 0.82 * particle.baseSize;
+        } else {
+          resetParticle(particle);
+        }
+      }
+      ctx.fillStyle = particle.color;
+      ctx.beginPath();
+      ctx.arc(particle.x, particle.y, particle.size, 0, 2 * Math.PI);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+      ctx.beginPath();
+      ctx.arc(
+        particle.x - 0.18 * particle.size,
+        particle.y - 0.18 * particle.size,
+        Math.max(0.38 * particle.size, 0.7),
+        0, 2 * Math.PI
+      );
+      ctx.closePath();
+      ctx.fill();
+    });
+    animationFrameId = requestAnimationFrame(draw);
+  };
+
+  var resize = function() {
+    var parent = canvas.parentElement;
+    if (!parent) return;
+    var dpr = window.devicePixelRatio || 1;
+    var width = parent.clientWidth;
+    var height = Math.min(320, width / 848 * 320);
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    init();
+  };
+
+  var handleMouseMove = function(event) {
+    var rect = canvas.getBoundingClientRect();
+    mouse.x = event.clientX - rect.left;
+    mouse.y = event.clientY - rect.top;
+  };
+  var handleTouchMove = function(event) {
+    var rect = canvas.getBoundingClientRect();
+    mouse.x = event.touches[0].clientX - rect.left;
+    mouse.y = event.touches[0].clientY - rect.top;
+  };
+  var clearMouse = function() {
+    mouse.x = null;
+    mouse.y = null;
+  };
+
+  resize();
+  draw();
+  window.addEventListener('resize', resize);
+  canvas.addEventListener('mousemove', handleMouseMove);
+  canvas.addEventListener('mouseleave', clearMouse);
+  canvas.addEventListener('touchmove', handleTouchMove, { passive: true });
+  canvas.addEventListener('touchend', clearMouse);
+})();
+</script>
+</body>
+</html>
